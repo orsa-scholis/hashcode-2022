@@ -14,7 +14,7 @@ fn main() {
         "f_find_great_mentors",
     ];
 
-    let idx = 4;
+    let idx = 3;
 
     let input = "data/".to_string() + &files[idx] + ".in.txt";
     let input = &input;
@@ -39,8 +39,8 @@ fn main() {
         projects.push(parse_project(&mut lines));
     }
 
-    println!("{contributors:?}");
-    println!("{projects:?}");
+    // println!("{contributors:?}");
+    // println!("{projects:?}");
 
     projects.sort_by_key(|project| project.best_before);
     // projects.sort_by_key(|project| project.roles.len());
@@ -83,8 +83,12 @@ fn main() {
 
     // try projects
 
+    println!("project roles len: {}", projects.iter().map(|p| p.roles.len()).max().unwrap());
+    println!("projects: {}", projects.len());
+
     // ignore large projects
-    projects = projects.into_iter().filter(|project| project.roles.len() <= 15).collect();
+    projects = projects.into_iter().filter(|project| project.roles.len() <= 100).collect();
+
 
     println!("last day: {}", latest_possible_day);
     while current_day < latest_possible_day {
@@ -142,8 +146,43 @@ fn main() {
 
             // is there a way to fill project's roles with current employees?
 
-            // let found_assn = fill_roles_bad(&project.roles, &available_employees_by_skill);
-            // if let Some(assn) = found_assn {
+            let found_assn = fill_roles_bad(&project.roles, &available_employees_by_skill);
+            if let Some(assn) = found_assn {
+                // println!("length of assn is: {}", assn.len());
+                min_project_duration = if min_project_duration > project.days_to_complete {
+                    project.days_to_complete
+                } else {
+                    min_project_duration
+                };
+                found_project = true;
+                for assigned_employee in assn.iter() {
+                    let end_date = current_day + project.days_to_complete;
+                    *employee_end_dates.get_mut(assigned_employee).unwrap() = end_date;
+                }
+
+
+                for (i, employee) in assn.iter().enumerate() {
+                    let skill = project.roles[i].clone();
+                    let level = project.roles[i].level;
+
+                    let current_skill = skills_of_employee[employee][&skill.lang];
+
+                    if current_skill == level {
+                        *skills_of_employee.get_mut(employee).unwrap().get_mut(&skill.lang).unwrap() = level+1;
+                    }
+
+                }
+
+                assns.push(ProjectAssignment {
+                    project_name: project.name.clone(),
+                    roles_filled_by: assn,
+                });
+
+                assigned_projects.insert(project.name.clone());
+            }
+            // let mut assn = Vec::new();
+            // let mut used_employees = HashSet::new();
+            // if fill_roles(&project.roles, &mut used_employees, &available_employees_by_skill, &mut assn) {
             //     // println!("length of assn is: {}", assn.len());
             //     min_project_duration = if min_project_duration > project.days_to_complete {
             //         project.days_to_complete
@@ -161,31 +200,10 @@ fn main() {
             //     });
             //
             //     assigned_projects.insert(project.name.clone());
+            //
             // }
-            let mut assn = Vec::new();
-            let mut used_employees = HashSet::new();
-            if fill_roles(&project.roles, &mut used_employees, &available_employees_by_skill, &mut assn) {
-                // println!("length of assn is: {}", assn.len());
-                min_project_duration = if min_project_duration > project.days_to_complete {
-                    project.days_to_complete
-                } else {
-                    min_project_duration
-                };
-                found_project = true;
-                for assigned_employee in assn.iter() {
-                    let end_date = current_day + project.days_to_complete;
-                    *employee_end_dates.get_mut(assigned_employee).unwrap() = end_date;
-                }
-                assns.push(ProjectAssignment {
-                    project_name: project.name.clone(),
-                    roles_filled_by: assn,
-                });
 
-                assigned_projects.insert(project.name.clone());
-
-            }
-
-            println!("took time for fill_roles: {:?}", Instant::now().duration_since(pre_fill_roles));
+            // println!("took time for fill_roles: {:?}", Instant::now().duration_since(pre_fill_roles));
         }
         println!("min project duration: {}", min_project_duration);
         println!("found project: {}", found_project);
