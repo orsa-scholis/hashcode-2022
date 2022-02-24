@@ -14,7 +14,7 @@ fn main() {
         "f_find_great_mentors",
     ];
 
-    let idx = 3;
+    let idx = 4;
 
     let input = "data/".to_string() + &files[idx] + ".in.txt";
     let input = &input;
@@ -42,7 +42,8 @@ fn main() {
     // println!("{contributors:?}");
     // println!("{projects:?}");
 
-    projects.sort_by_key(|project| project.best_before);
+    projects.sort_by_key(|project| project.best_before + project.score);
+    // projects.sort_by_key(|project| project.score);
     // projects.sort_by_key(|project| project.roles.len());
 
     let mut skills_of_employee = HashMap::new();
@@ -97,7 +98,7 @@ fn main() {
         let mut min_project_duration = i64::MAX;
         let mut found_project = false;
 
-        projects = projects.into_iter().filter(|project| !assigned_projects.contains(&project.name)).collect();
+        projects = projects.into_iter().filter(|project| !assigned_projects.contains(&project.name) && project.best_before + project.score >= current_day + project.days_to_complete).collect();
 
         for project in &projects {
 
@@ -146,60 +147,54 @@ fn main() {
 
             // is there a way to fill project's roles with current employees?
 
-            let found_assn = fill_roles_bad(&project.roles, &available_employees_by_skill);
-            if let Some(assn) = found_assn {
-                // println!("length of assn is: {}", assn.len());
-                min_project_duration = if min_project_duration > project.days_to_complete {
-                    project.days_to_complete
-                } else {
-                    min_project_duration
-                };
-                found_project = true;
-                for assigned_employee in assn.iter() {
-                    let end_date = current_day + project.days_to_complete;
-                    *employee_end_dates.get_mut(assigned_employee).unwrap() = end_date;
-                }
-
-
-                for (i, employee) in assn.iter().enumerate() {
-                    let skill = project.roles[i].clone();
-                    let level = project.roles[i].level;
-
-                    let current_skill = skills_of_employee[employee][&skill.lang];
-
-                    if current_skill == level {
-                        *skills_of_employee.get_mut(employee).unwrap().get_mut(&skill.lang).unwrap() = level+1;
-                    }
-
-                }
-
-                assns.push(ProjectAssignment {
-                    project_name: project.name.clone(),
-                    roles_filled_by: assn,
-                });
-
-                assigned_projects.insert(project.name.clone());
+            let found_assn = fill_roles_bad(&project.roles, &available_employees_by_skill, &skills_of_employee);
+            if found_assn.is_none() {
+                continue;
             }
+            let assn = found_assn.unwrap();
+
+            // let mut assn = Vec::new();
+            // let mut used_employees = HashSet::new();
+            // if !fill_roles(&project.roles, &mut used_employees, &available_employees_by_skill, &mut assn) {
+            //     continue;
+            // }
+
+            // println!("length of assn is: {}", assn.len());
+            min_project_duration = if min_project_duration > project.days_to_complete {
+                project.days_to_complete
+            } else {
+                min_project_duration
+            };
+            found_project = true;
+            for assigned_employee in assn.iter() {
+                let end_date = current_day + project.days_to_complete;
+                *employee_end_dates.get_mut(assigned_employee).unwrap() = end_date;
+            }
+
+
+            for (i, employee) in assn.iter().enumerate() {
+                let skill = project.roles[i].clone();
+                let level = project.roles[i].level;
+
+                let current_skill = skills_of_employee[employee][&skill.lang];
+
+                if current_skill == level {
+                    *skills_of_employee.get_mut(employee).unwrap().get_mut(&skill.lang).unwrap() = level+1;
+                }
+
+            }
+
+            assns.push(ProjectAssignment {
+                project_name: project.name.clone(),
+                roles_filled_by: assn,
+            });
+
+            assigned_projects.insert(project.name.clone());
+
             // let mut assn = Vec::new();
             // let mut used_employees = HashSet::new();
             // if fill_roles(&project.roles, &mut used_employees, &available_employees_by_skill, &mut assn) {
-            //     // println!("length of assn is: {}", assn.len());
-            //     min_project_duration = if min_project_duration > project.days_to_complete {
-            //         project.days_to_complete
-            //     } else {
-            //         min_project_duration
-            //     };
-            //     found_project = true;
-            //     for assigned_employee in assn.iter() {
-            //         let end_date = current_day + project.days_to_complete;
-            //         *employee_end_dates.get_mut(assigned_employee).unwrap() = end_date;
-            //     }
-            //     assns.push(ProjectAssignment {
-            //         project_name: project.name.clone(),
-            //         roles_filled_by: assn,
-            //     });
-            //
-            //     assigned_projects.insert(project.name.clone());
+
             //
             // }
 
@@ -228,9 +223,11 @@ fn main() {
     save_solution(&out_path, &assns);
     print_solution(&assns);
 
+    println!("did: {}", files[idx]);
+
 }
 
-fn fill_roles_bad(roles: &[Skill], available_employees_by_skill: &HashMap<String, HashMap<i64, HashSet<String>>>) -> Option<Vec<String>> {
+fn fill_roles_bad(roles: &[Skill], available_employees_by_skill: &HashMap<String, HashMap<i64, HashSet<String>>>, _skills_employees: &HashMap<String, HashMap<String, i64>>) -> Option<Vec<String>> {
     let mut assn = Vec::new();
 
     let mut used_employees = HashSet::new();
@@ -242,9 +239,21 @@ fn fill_roles_bad(roles: &[Skill], available_employees_by_skill: &HashMap<String
 
         let level_to_employees = available_employees_by_skill.get(&skill.lang).unwrap();
 
+
+        let found = used_employees.iter().any(|employee| {
+            _skills_employees[employee].contains_key(&skill.lang) && _skills_employees[employee][&skill.lang] >= skill.level
+        });
+
+        let min = if found {
+            skill.level - 1
+        } else {
+            skill.level
+        };
+
+
         let mut found_employee = None;
         for (level, employees) in level_to_employees.iter() {
-            if *level < skill.level {
+            if *level < min {
                 continue;
             }
 
